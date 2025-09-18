@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-faster/errors"
 	"go.uber.org/zap"
@@ -99,6 +100,11 @@ func (c *Client) dc(ctx context.Context, dcID int, max int64, dialer mtproto.Dia
 	if err != nil {
 		// Ignore case then we are not authorized.
 		if auth.IsUnauthorized(err) {
+			return p, nil
+		}
+
+		// Check if INVALID_DC_ID is contained in the error message
+		if strings.Contains(err.Error(), "DC_ID_INVALID") {
 			return p, nil
 		}
 

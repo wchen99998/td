@@ -34,7 +34,7 @@ func (d *Downloader) Download(rpc Client, location tg.InputFileLocationClass) *B
 	return newBuilder(d, master{
 		client:   rpc,
 		precise:  true,
-		allowCDN: false,
+		allowCDN: true,
 		location: location,
 	})
 }

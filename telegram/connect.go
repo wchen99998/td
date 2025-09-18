@@ -136,6 +136,7 @@ func (c *Client) Run(ctx context.Context, f func(ctx context.Context) error) (er
 
 	c.log.Info("Starting")
 	defer c.log.Info("Closed")
+
 	// Cancel client on exit.
 	defer c.cancel()
 	defer func() {

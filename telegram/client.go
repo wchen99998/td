@@ -229,3 +229,23 @@ func (c *Client) init() {
 	c.invoker = chainMiddlewares(InvokeFunc(c.invokeDirect), c.mw...)
 	c.tg = tg.NewClient(c.invoker)
 }
+
+
+func (c *Client) UpdateConfig(ctx context.Context) {
+	cfg, err := c.API().HelpGetConfig(ctx)
+	if err != nil {
+		c.log.Warn("fetch config", zap.Error(err))
+		return
+	}
+	c.log.Debug("fetched config",
+		zap.Int("this_dc", cfg.ThisDC),
+		zap.Strings("dc_options", func() []string {
+			var out []string
+			for _, dc := range cfg.DCOptions {
+				out = append(out, dc.String())
+			}
+			return out
+		}()),
+	)
+	c.cfg.Store(*cfg)
+}
