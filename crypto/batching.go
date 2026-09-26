@@ -19,8 +19,8 @@ type BatchingOptions struct {
 	// A full queue uses the single-message implementation immediately.
 	// Immediate and partial fallbacks run on their existing caller goroutines.
 	MaxPending int
-	// MaxWait is the maximum intentional wait for a full batch. Default: 1 ms.
-	// Negative values only batch jobs already ready. Values above 1 ms are clamped.
+	// MaxWait is the maximum intentional wait for a full batch. Default: 2 ms.
+	// Negative values only batch jobs already ready. Values above 2 ms are clamped.
 	MaxWait time.Duration
 }
 
@@ -111,9 +111,9 @@ func NewBatcher(opts *BatchingOptions) *Batcher {
 	}
 	b.opts.MaxPending = max(4, min(b.opts.MaxPending, 1024))
 	if b.opts.MaxWait == 0 {
-		b.opts.MaxWait = time.Millisecond
+		b.opts.MaxWait = 2 * time.Millisecond
 	}
-	b.opts.MaxWait = max(0, min(b.opts.MaxWait, time.Millisecond))
+	b.opts.MaxWait = max(0, min(b.opts.MaxWait, 2*time.Millisecond))
 	b.jobs = make(chan *cryptoJob, b.opts.MaxPending)
 	b.slots = make(chan struct{}, b.opts.MaxPending)
 	return b

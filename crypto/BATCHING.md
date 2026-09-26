@@ -14,6 +14,22 @@ implementation separately. Unsupported builds/CPUs, `purego`, BoringCrypto and
 FIPS mode use the ordinary Go AES implementation. This does not make MTProto or
 IGE a FIPS-approved protocol.
 
+Applications must replace **both** modules in their own `go.mod`: dependency
+modules' `replace` directives are not inherited. These commands resolve the TD
+branch once and record an immutable pseudo-version alongside the matching IGE
+version:
+
+```sh
+td_fork_version="$(go list -m -f '{{.Version}}' github.com/wchen99998/td@codex/aes-ige-simd)"
+go mod edit "-replace=github.com/gotd/td=github.com/wchen99998/td@${td_fork_version}"
+go mod edit -replace=github.com/gotd/ige=github.com/wchen99998/ige@v0.0.0-20260926040812-798915846b22
+go mod tidy
+```
+
+Keep imports under `github.com/gotd/td` and `github.com/gotd/ige`, and commit the
+resulting `go.mod` and `go.sum`. Replacing only TD leaves the upstream IGE module
+without the new AES-256 APIs and fails to compile.
+
 One scheduler belongs to each Telegram client and is shared by its primary,
 upload, media and CDN pool connections. Construction starts no goroutine.
 `Client.Run` starts the worker and closes it on exit. The scheduler only performs
@@ -22,13 +38,13 @@ write and RPC retry behavior.
 
 Defaults are a 64 KiB minimum padded size, at most 64 queued or worker-executed
 messages, and a
-one-millisecond intentional collection window. Already-ready jobs are consumed
+two-millisecond intentional collection window. Already-ready jobs are consumed
 first. Smaller messages, unsupported hardware and a full queue use the optimized
 single-message path immediately. Partial batches return ownership to their
 original callers, which process them individually in parallel without adding
 goroutines. These caller-owned fallbacks are outside the pending bound. Negative
 `MaxWait` disables deliberate collection waits; positive values are capped at
-one millisecond. Scheduler/CPU contention may make observed queue time longer
+two milliseconds. Scheduler/CPU contention may make observed queue time longer
 than this collection budget.
 
 Cancellation does not allow a caller to reuse a queued buffer until the worker
