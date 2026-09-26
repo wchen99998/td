@@ -8,6 +8,18 @@ Leave the option nil to use the
 original `crypto/aes` plus `ige.EncryptBlocks`/`DecryptBlocks` implementation. This
 allows comparisons without changing the application or the wire protocol.
 
+Set `SingleMessageOnly: true` in these options to use accelerated single-message
+AES without a worker, queue allocation or collection wait. This is appropriate
+for network-paced traffic where four prepared packets rarely arrive together.
+`MaxWait < 0` still uses a queue to batch jobs that are already ready; it is a
+different policy. `CryptoStats.BatchingEnabled` reports the selected, supported
+batching policy separately from the `BatchSIMD` hardware/build capability.
+
+The enabled encryption path uses its plaintext buffer in place and then moves
+the ciphertext to make room for the outer header. This avoids a temporary
+packet-sized ciphertext allocation while retaining custom-encoder behavior and
+overlapping input semantics. Decrypted payloads still own independent memory.
+
 The SIMD build requires Go 1.26 and `GOEXPERIMENT=simd`. Runtime checks select the
 single-message AVX/AES implementation and the four-message AVX-512/VAES
 implementation separately. Unsupported builds/CPUs, `purego`, BoringCrypto and
@@ -22,7 +34,7 @@ version:
 ```sh
 td_fork_version="$(go list -m -f '{{.Version}}' github.com/wchen99998/td@codex/aes-ige-simd)"
 go mod edit "-replace=github.com/gotd/td=github.com/wchen99998/td@${td_fork_version}"
-go mod edit -replace=github.com/gotd/ige=github.com/wchen99998/ige@v0.0.0-20260926040812-798915846b22
+go mod edit -replace=github.com/gotd/ige=github.com/wchen99998/ige@v0.0.0-20260926043934-f3b4f4ad152c
 go mod tidy
 ```
 

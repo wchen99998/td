@@ -89,6 +89,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/wchen99998/ige v0.0.0-20260926040812-798915846b22 h1:TNNdUEc1fIfdjnjsRoVDtg4R+RKJvrzVvzG+YNhtjTQ=
 github.com/wchen99998/ige v0.0.0-20260926040812-798915846b22/go.mod h1:qvCosUQ1UuEamgfLleY9CLR9z9Q0/OnYwydAWZeCw3g=
+github.com/wchen99998/ige v0.0.0-20260926043934-f3b4f4ad152c h1:NDub0ecJ/Vg1ljjRuFT4AD/5iz9rtXc0aDqjgB3tDY0=
+github.com/wchen99998/ige v0.0.0-20260926043934-f3b4f4ad152c/go.mod h1:qvCosUQ1UuEamgfLleY9CLR9z9Q0/OnYwydAWZeCw3g=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=

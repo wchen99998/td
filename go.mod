@@ -62,4 +62,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/gotd/ige => github.com/wchen99998/ige v0.0.0-20260926040812-798915846b22
+replace github.com/gotd/ige => github.com/wchen99998/ige v0.0.0-20260926043934-f3b4f4ad152c

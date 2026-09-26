@@ -60,6 +60,9 @@ func (c Cipher) EncryptContext(ctx context.Context, key AuthKey, data EncryptedM
 	if err := data.EncodeWithoutCopy(b); err != nil {
 		return err
 	}
+	if c.batcher != nil {
+		return c.encryptBufferContext(ctx, key, b)
+	}
 
 	msg, err := c.encryptMessageContext(ctx, key, b)
 	if err != nil {
@@ -71,5 +74,34 @@ func (c Cipher) EncryptContext(ctx context.Context, key AuthKey, data EncryptedM
 		return err
 	}
 
+	return nil
+}
+
+// encryptBufferContext encrypts an encoded plaintext buffer in place. Keeping
+// plaintext at offset zero preserves custom encoders and input slices that
+// overlap b. The final shift replaces the existing ciphertext copy without
+// allocating a second full-size buffer.
+func (c Cipher) encryptBufferContext(ctx context.Context, k AuthKey, b *bin.Buffer) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	offset := len(b.Buf)
+	b.Expand(countPadding(offset))
+	if _, err := io.ReadFull(c.rand, b.Buf[offset:]); err != nil {
+		return err
+	}
+
+	messageKey := MessageKey(k.Value, b.Buf, c.encryptSide)
+	key, iv := Keys(k.Value, messageKey, c.encryptSide)
+	if err := c.batcher.crypt(ctx, key, iv, b.Buf, b.Buf, false); err != nil {
+		return err
+	}
+
+	const headerSize = 8 + 16 // auth_key_id and msg_key
+	n := len(b.Buf)
+	b.Expand(headerSize)
+	copy(b.Buf[headerSize:], b.Buf[:n])
+	copy(b.Buf[:8], k.ID[:])
+	copy(b.Buf[8:headerSize], messageKey[:])
 	return nil
 }

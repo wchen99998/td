@@ -13,6 +13,10 @@ import (
 // BatchingOptions enables AES-IGE acceleration and bounded batching of independent
 // MTProto messages. A nil option keeps the original cipher implementation.
 type BatchingOptions struct {
+	// SingleMessageOnly enables accelerated AES without batching, queues or
+	// collection waits. Use it when network-paced traffic rarely forms batches.
+	// The default false retains batching for concurrent CPU-bound workloads.
+	SingleMessageOnly bool
 	// MinBytes is the minimum padded message size to queue. Default: 64 KiB.
 	MinBytes int
 	// MaxPending bounds queued and worker-executed messages. Default: 64.
@@ -29,6 +33,7 @@ type BatchStats struct {
 	Enabled         bool   `json:"enabled"`
 	SIMD            bool   `json:"simd"`
 	BatchSIMD       bool   `json:"batch_simd"`
+	BatchingEnabled bool   `json:"batching_enabled"`
 	EncryptBatches  uint64 `json:"encrypt_batches"`
 	DecryptBatches  uint64 `json:"decrypt_batches"`
 	BatchedMessages uint64 `json:"batched_messages"`
@@ -97,7 +102,7 @@ type cryptoJob struct {
 
 // NewBatcher creates a scheduler; nil opts disables it entirely.
 func NewBatcher(opts *BatchingOptions) *Batcher {
-	b := &Batcher{done: make(chan struct{})}
+	b := &Batcher{}
 	b.simd, b.available = ige.AES256Available(), ige.AES256Batch4Available()
 	if opts == nil {
 		return b
@@ -114,17 +119,21 @@ func NewBatcher(opts *BatchingOptions) *Batcher {
 		b.opts.MaxWait = 2 * time.Millisecond
 	}
 	b.opts.MaxWait = max(0, min(b.opts.MaxWait, 2*time.Millisecond))
+	if b.opts.SingleMessageOnly {
+		return b
+	}
+	b.done = make(chan struct{})
 	b.jobs = make(chan *cryptoJob, b.opts.MaxPending)
 	b.slots = make(chan struct{}, b.opts.MaxPending)
 	return b
 }
 
 // Start starts at most one worker. Unsupported CPUs always take the immediate
-// single-message path and do not start a worker.
+// single-message path and do not start a worker. SingleMessageOnly also skips it.
 func (b *Batcher) Start(ctx context.Context) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.started || b.closed.Load() || !b.enabled || !b.available {
+	if b.started || b.closed.Load() || !b.enabled || !b.available || b.opts.SingleMessageOnly {
 		return
 	}
 	ctx, b.cancel = context.WithCancel(ctx)
@@ -147,7 +156,8 @@ func (b *Batcher) Close() {
 }
 
 // Stats returns a concurrent snapshot. The capability flags describe this build
-// and CPU; Enabled reports whether the owning client opted in.
+// and CPU; Enabled reports whether the owning client opted in. BatchingEnabled
+// reports whether batching is selected and supported, independently of capability.
 func (b *Batcher) Stats() BatchStats {
 	if b == nil {
 		return BatchStats{}
@@ -155,7 +165,8 @@ func (b *Batcher) Stats() BatchStats {
 	s := &b.stats
 	return BatchStats{
 		Enabled: b.enabled, SIMD: b.simd, BatchSIMD: b.available,
-		EncryptBatches: s.encryptBatches.Load(), DecryptBatches: s.decryptBatches.Load(),
+		BatchingEnabled: b.enabled && b.available && !b.opts.SingleMessageOnly,
+		EncryptBatches:  s.encryptBatches.Load(), DecryptBatches: s.decryptBatches.Load(),
 		BatchedMessages: s.batchedMessages.Load(), BatchedBytes: s.batchedBytes.Load(),
 		SingleMessages: s.singleMessages.Load(), SingleBytes: s.singleBytes.Load(),
 		EncryptMessages: s.encryptMessages.Load(), DecryptMessages: s.decryptMessages.Load(),
@@ -174,7 +185,7 @@ func (b *Batcher) crypt(ctx context.Context, key, iv [32]byte, dst, src []byte, 
 	if b.closed.Load() {
 		return ErrBatcherClosed
 	}
-	if !b.enabled || !b.available || len(src) < b.opts.MinBytes {
+	if !b.enabled || b.opts.SingleMessageOnly || !b.available || len(src) < b.opts.MinBytes {
 		return b.single(ctx, key, iv, dst, src, decrypt)
 	}
 	b.mu.Lock()
