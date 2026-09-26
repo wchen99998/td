@@ -139,6 +139,10 @@ func (c *Client) Run(ctx context.Context, f func(ctx context.Context) error) (er
 	// Setting up client context for background operations like updates
 	// handling or pool creation.
 	c.ctx, c.cancel = context.WithCancel(ctx)
+	if c.cryptoBatcher != nil {
+		c.cryptoBatcher.Start(c.ctx)
+		defer c.cryptoBatcher.Close()
+	}
 
 	c.log.Info("Starting")
 	defer c.log.Info("Closed")

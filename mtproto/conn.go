@@ -44,6 +44,14 @@ type Cipher interface {
 	Encrypt(key crypto.AuthKey, data crypto.EncryptedMessageData, b *bin.Buffer) error
 }
 
+// ContextCipher optionally supports cancellation while scheduling cryptographic
+// work. Implementations must relinquish caller buffers before returning.
+type ContextCipher interface {
+	Cipher
+	DecryptFromBufferContext(context.Context, crypto.AuthKey, *bin.Buffer) (*crypto.EncryptedMessageData, error)
+	EncryptContext(context.Context, crypto.AuthKey, crypto.EncryptedMessageData, *bin.Buffer) error
+}
+
 // Dialer is an abstraction for MTProto transport connection creator.
 type Dialer func(ctx context.Context) (transport.Conn, error)
 

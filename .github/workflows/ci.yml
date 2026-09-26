@@ -62,3 +62,20 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           GOFLAGS: ${{ matrix.flags }}
         run: go test --timeout 5m ./...
+
+  crypto-simd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.1'
+      - name: Check SIMD integration and buffer ownership
+        env:
+          GOEXPERIMENT: simd
+        run: go test -race ./crypto ./mtproto ./telegram
+      - name: Check runtime fallback
+        env:
+          GOEXPERIMENT: simd
+          GODEBUG: cpu.avx512f=off
+        run: go test ./crypto ./mtproto ./telegram

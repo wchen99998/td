@@ -1,6 +1,8 @@
 package mtproto
 
 import (
+	"context"
+
 	"github.com/go-faster/errors"
 	"go.uber.org/zap"
 
@@ -10,6 +12,10 @@ import (
 )
 
 func (c *Conn) newEncryptedMessage(id int64, seq int32, payload bin.Encoder, b *bin.Buffer) error {
+	return c.newEncryptedMessageContext(context.Background(), id, seq, payload, b)
+}
+
+func (c *Conn) newEncryptedMessageContext(ctx context.Context, id int64, seq int32, payload bin.Encoder, b *bin.Buffer) error {
 	s := c.session()
 
 	// TODO(tdakkota): Smarter gzip.
@@ -60,7 +66,13 @@ func (c *Conn) newEncryptedMessage(id int64, seq int32, payload bin.Encoder, b *
 	}
 
 	log.Debug("Request", zap.Int64("msg_id", id))
-	if err := c.cipher.Encrypt(s.Key, d, b); err != nil {
+	var err error
+	if cipher, ok := c.cipher.(ContextCipher); ok {
+		err = cipher.EncryptContext(ctx, s.Key, d, b)
+	} else {
+		err = c.cipher.Encrypt(s.Key, d, b)
+	}
+	if err != nil {
 		return errors.Wrap(err, "encrypt")
 	}
 

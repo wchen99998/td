@@ -50,8 +50,20 @@ func checkMessageID(now time.Time, rawID int64) error {
 }
 
 func (c *Conn) decryptMessage(b *bin.Buffer) (*crypto.EncryptedMessageData, error) {
+	return c.decryptMessageContext(context.Background(), b)
+}
+
+func (c *Conn) decryptMessageContext(ctx context.Context, b *bin.Buffer) (*crypto.EncryptedMessageData, error) {
 	session := c.session()
-	msg, err := c.cipher.DecryptFromBuffer(session.Key, b)
+	var (
+		msg *crypto.EncryptedMessageData
+		err error
+	)
+	if cipher, ok := c.cipher.(ContextCipher); ok {
+		msg, err = cipher.DecryptFromBufferContext(ctx, session.Key, b)
+	} else {
+		msg, err = c.cipher.DecryptFromBuffer(session.Key, b)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "decrypt")
 	}
@@ -71,7 +83,7 @@ func (c *Conn) decryptMessage(b *bin.Buffer) (*crypto.EncryptedMessageData, erro
 }
 
 func (c *Conn) consumeMessage(ctx context.Context, buf *bin.Buffer) error {
-	msg, err := c.decryptMessage(buf)
+	msg, err := c.decryptMessageContext(ctx, buf)
 	if errors.Is(err, errRejected) {
 		c.log.Warn("Ignoring rejected message", zap.Error(err))
 		return nil

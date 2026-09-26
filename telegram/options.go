@@ -63,6 +63,11 @@ type Options struct {
 
 	// Random is random source. Defaults to crypto.
 	Random io.Reader
+	// CryptoBatching opts in to AES-IGE acceleration and bounded batching across
+	// this client's connections. Nil preserves the original crypto path.
+	// An empty options value uses conservative defaults. No worker is started
+	// until Run, and unsupported CPUs process messages individually.
+	CryptoBatching *CryptoBatchingOptions
 	// Logger is instance of zap.Logger. No logs by default.
 	Logger *zap.Logger
 	// SessionStorage will be used to load and save session data.

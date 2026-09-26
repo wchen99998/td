@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"context"
 	"crypto/aes"
 	"io"
 
@@ -13,6 +14,13 @@ func countPadding(l int) int { return 16 + (16 - (l % 16)) }
 
 // encryptMessage encrypts plaintext using AES-IGE.
 func (c Cipher) encryptMessage(k AuthKey, plaintext *bin.Buffer) (EncryptedMessage, error) {
+	return c.encryptMessageContext(context.Background(), k, plaintext)
+}
+
+func (c Cipher) encryptMessageContext(ctx context.Context, k AuthKey, plaintext *bin.Buffer) (EncryptedMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return EncryptedMessage{}, err
+	}
 	offset := len(plaintext.Buf)
 	plaintext.Buf = append(plaintext.Buf, make([]byte, countPadding(offset))...)
 	if _, err := io.ReadFull(c.rand, plaintext.Buf[offset:]); err != nil {
@@ -21,27 +29,39 @@ func (c Cipher) encryptMessage(k AuthKey, plaintext *bin.Buffer) (EncryptedMessa
 
 	messageKey := MessageKey(k.Value, plaintext.Buf, c.encryptSide)
 	key, iv := Keys(k.Value, messageKey, c.encryptSide)
-	aesBlock, err := aes.NewCipher(key[:])
-	if err != nil {
-		return EncryptedMessage{}, err
-	}
 	msg := EncryptedMessage{
 		AuthKeyID:     k.ID,
 		MsgKey:        messageKey,
 		EncryptedData: make([]byte, len(plaintext.Buf)),
 	}
-	ige.EncryptBlocks(aesBlock, iv[:], msg.EncryptedData, plaintext.Buf)
+	if c.batcher != nil {
+		if err := c.batcher.crypt(ctx, key, iv, msg.EncryptedData, plaintext.Buf, false); err != nil {
+			return EncryptedMessage{}, err
+		}
+	} else {
+		aesBlock, err := aes.NewCipher(key[:])
+		if err != nil {
+			return EncryptedMessage{}, err
+		}
+		ige.EncryptBlocks(aesBlock, iv[:], msg.EncryptedData, plaintext.Buf)
+	}
 	return msg, nil
 }
 
 // Encrypt encrypts EncryptedMessageData using AES-IGE to given buffer.
 func (c Cipher) Encrypt(key AuthKey, data EncryptedMessageData, b *bin.Buffer) error {
+	return c.EncryptContext(context.Background(), key, data, b)
+}
+
+// EncryptContext is Encrypt with cancellation-aware crypto scheduling.
+// It never returns while a scheduler still owns b or data's backing buffers.
+func (c Cipher) EncryptContext(ctx context.Context, key AuthKey, data EncryptedMessageData, b *bin.Buffer) error {
 	b.Reset()
 	if err := data.EncodeWithoutCopy(b); err != nil {
 		return err
 	}
 
-	msg, err := c.encryptMessage(key, b)
+	msg, err := c.encryptMessageContext(ctx, key, b)
 	if err != nil {
 		return err
 	}

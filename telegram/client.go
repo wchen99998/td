@@ -14,6 +14,7 @@ import (
 
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/clock"
+	"github.com/gotd/td/crypto"
 	"github.com/gotd/td/mtproto"
 	"github.com/gotd/td/oteltg"
 	"github.com/gotd/td/pool"
@@ -83,6 +84,9 @@ type Client struct {
 
 	// MTProto options.
 	opts mtproto.Options // immutable
+	// Shared by the primary connection and every DC/pool connection. Run owns
+	// the scheduler lifetime; creating an unstarted client starts no worker.
+	cryptoBatcher *crypto.Batcher
 
 	// DCList state.
 	// Domain list (for websocket)
@@ -168,6 +172,7 @@ func NewClient(appID int, appHash string, opt Options) *Client {
 		mode = manager.ConnModeData
 	}
 	client := &Client{
+		cryptoBatcher: crypto.NewBatcher(opt.CryptoBatching),
 		rand:          opt.Random,
 		log:           opt.Logger,
 		appID:         appID,
@@ -213,6 +218,7 @@ func NewClient(appID int, appHash string, opt Options) *Client {
 	}
 
 	client.opts = mtproto.Options{
+		Cipher:            crypto.NewClientCipher(opt.Random).WithBatcher(client.cryptoBatcher),
 		PublicKeys:        opt.PublicKeys,
 		Random:            opt.Random,
 		Logger:            opt.Logger,

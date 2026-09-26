@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"context"
 	"crypto/aes"
 
 	"github.com/go-faster/errors"
@@ -12,6 +13,12 @@ import (
 
 // DecryptFromBuffer decodes EncryptedMessage and decrypts it.
 func (c Cipher) DecryptFromBuffer(k AuthKey, buf *bin.Buffer) (*EncryptedMessageData, error) {
+	return c.DecryptFromBufferContext(context.Background(), k, buf)
+}
+
+// DecryptFromBufferContext is DecryptFromBuffer with cancellation-aware crypto
+// scheduling. All message-key, plaintext and padding checks remain mandatory.
+func (c Cipher) DecryptFromBufferContext(ctx context.Context, k AuthKey, buf *bin.Buffer) (*EncryptedMessageData, error) {
 	msg := &EncryptedMessage{}
 	// Because we assume that buffer is valid during decrypting, we able to
 	// use DecodeWithoutCopy and do not allocate inner buffer for EncryptedMessage.
@@ -19,12 +26,17 @@ func (c Cipher) DecryptFromBuffer(k AuthKey, buf *bin.Buffer) (*EncryptedMessage
 		return nil, err
 	}
 
-	return c.Decrypt(k, msg)
+	return c.DecryptContext(ctx, k, msg)
 }
 
 // Decrypt decrypts data from encrypted message using AES-IGE.
 func (c Cipher) Decrypt(k AuthKey, encrypted *EncryptedMessage) (*EncryptedMessageData, error) {
-	plaintext, err := c.decryptMessage(k, encrypted)
+	return c.DecryptContext(context.Background(), k, encrypted)
+}
+
+// DecryptContext is Decrypt with cancellation-aware crypto scheduling.
+func (c Cipher) DecryptContext(ctx context.Context, k AuthKey, encrypted *EncryptedMessage) (*EncryptedMessageData, error) {
+	plaintext, err := c.decryptMessageContext(ctx, k, encrypted)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +76,13 @@ func (c Cipher) Decrypt(k AuthKey, encrypted *EncryptedMessage) (*EncryptedMessa
 
 // decryptMessage decrypts data from encrypted message using AES-IGE.
 func (c Cipher) decryptMessage(k AuthKey, encrypted *EncryptedMessage) ([]byte, error) {
+	return c.decryptMessageContext(context.Background(), k, encrypted)
+}
+
+func (c Cipher) decryptMessageContext(ctx context.Context, k AuthKey, encrypted *EncryptedMessage) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if k.ID != encrypted.AuthKeyID {
 		return nil, errors.New("unknown auth key id")
 	}
@@ -72,12 +91,18 @@ func (c Cipher) decryptMessage(k AuthKey, encrypted *EncryptedMessage) ([]byte, 
 	}
 
 	key, iv := Keys(k.Value, encrypted.MsgKey, c.encryptSide.DecryptSide())
-	cipher, err := aes.NewCipher(key[:])
-	if err != nil {
-		return nil, err
-	}
 	plaintext := make([]byte, len(encrypted.EncryptedData))
-	ige.DecryptBlocks(cipher, iv[:], plaintext, encrypted.EncryptedData)
+	if c.batcher != nil {
+		if err := c.batcher.crypt(ctx, key, iv, plaintext, encrypted.EncryptedData, true); err != nil {
+			return nil, err
+		}
+	} else {
+		cipher, err := aes.NewCipher(key[:])
+		if err != nil {
+			return nil, err
+		}
+		ige.DecryptBlocks(cipher, iv[:], plaintext, encrypted.EncryptedData)
+	}
 
 	return plaintext, nil
 }
