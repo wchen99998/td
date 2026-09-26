@@ -71,6 +71,25 @@ func (c *Client) dc(
 	if len(dcList) < 1 {
 		return nil, errors.Errorf("unknown DC %d", dcID)
 	}
+	reusePrimary := false
+	if mode != manager.ConnModeCDN {
+		primary := c.session.Load()
+		if primary.DC == dcID {
+			// Same-DC pools must reuse the existing key: exporting authorization
+			// to our own DC is unnecessary and may be rejected by the server.
+			c.sessionsMux.Lock()
+			cached, ok := c.sessions[dcID]
+			c.sessionsMux.Unlock()
+			if !ok || primary.AuthKey.Zero() {
+				return nil, errors.Errorf("no reusable authorization key for primary DC %d", dcID)
+			}
+			data := cached.Load()
+			if data.DC != dcID || data.AuthKey != primary.AuthKey {
+				return nil, errors.Errorf("cached authorization key does not match primary DC %d", dcID)
+			}
+			reusePrimary = true
+		}
+	}
 	c.log.Debug("Creating pool",
 		zap.Int("dc_id", dcID),
 		zap.Int64("max", max),
@@ -147,6 +166,15 @@ func (c *Client) dc(
 						c.handleCDNConnDead(dcID, err)
 						return
 					}
+					if c.session.Load().DC == dcID {
+						// Same-DC pools share the primary key. Invalidate both
+						// stores together; after migration only reset this DC.
+						c.handlePrimaryConnDead(err)
+						if c.onDead != nil {
+							c.onDead(err)
+						}
+						return
+					}
 					c.handleDCConnDead(dcID, err)
 				},
 			},
@@ -159,6 +187,9 @@ func (c *Client) dc(
 	if mode == manager.ConnModeCDN {
 		// No auth transfer for CDN mode: CDN API uses file tokens and does not
 		// require auth.export/import bootstrap.
+		return p, nil
+	}
+	if reusePrimary {
 		return p, nil
 	}
 

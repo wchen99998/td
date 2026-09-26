@@ -1,6 +1,6 @@
 module github.com/gotd/td
 
-go 1.25.0
+go 1.26.1
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
@@ -61,3 +61,5 @@ require (
 	golang.org/x/text v0.35.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/gotd/ige => github.com/wchen99998/ige v0.0.0-20260926043934-f3b4f4ad152c

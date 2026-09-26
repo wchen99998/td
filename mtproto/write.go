@@ -26,7 +26,7 @@ func (c *Conn) write(ctx context.Context, msgID int64, seqNo int32, message bin.
 	b := bufPool.Get()
 	defer bufPool.Put(b)
 
-	if err := c.newEncryptedMessage(msgID, seqNo, message, b); err != nil {
+	if err := c.newEncryptedMessageContext(ctx, msgID, seqNo, message, b); err != nil {
 		return err
 	}
 

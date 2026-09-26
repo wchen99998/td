@@ -48,6 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -58,7 +60,13 @@ jobs:
           name: coverage
 
       - name: Send coverage
+        if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v6
         with:
           files: profile.out
           fail_ci_if_error: true
+          token: ${{ env.CODECOV_TOKEN }}
+
+      - name: Report optional coverage upload skip
+        if: env.CODECOV_TOKEN == ''
+        run: echo 'Codecov upload skipped because CODECOV_TOKEN is not configured. Coverage tests passed and the coverage artifact is available.' >> "$GITHUB_STEP_SUMMARY"

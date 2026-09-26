@@ -64,12 +64,12 @@ func getURLFormatter(rawURL string, resolver entity.UserResolver) (entity.Format
 	if u.Scheme == "tg" && u.Host == "user" {
 		id, err := strconv.ParseInt(u.Query().Get("id"), 10, 64)
 		if err != nil {
-			return nil, errors.Wrapf(err, "invalid user ID %q", id)
+			return nil, errors.Wrapf(err, "invalid user ID %d", id)
 		}
 
 		user, err := resolver(id)
 		if err != nil {
-			return nil, errors.Wrapf(err, "can't resolve user %q", id)
+			return nil, errors.Wrapf(err, "can't resolve user %d", id)
 		}
 
 		return entity.MentionName(user), nil
